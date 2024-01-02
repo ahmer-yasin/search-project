@@ -77,6 +77,27 @@ function ConnectionText(connection) {
   }
 }
 
+// function RenderUser(container, user) {
+//   const div = document.createElement('div');
+//   div.classList.add('user');
+//   const cls = user.connection ? 'connection' : 'hide';
+//   const con = ConnectionText(user.connection);
+
+//   div.innerHTML = `<div class='${cls}'>${con}</div><div class='userName'>${user.name}</div>`;
+//   const button = document.createElement('div');
+//   button.innerHTML = (user.connection === 1) ? 'Remove' : 'Add';
+//   button.classList.add('button');
+//   button.addEventListener('click', () => {
+//     const cmd = (user.connection === 1) ? 'unfriend' : 'friend';
+//     const userId = document.getElementById('user').value;
+//     axios.get(`http://localhost:3001/api/${cmd}/${userId}/${user.id}`).then((response) => {
+//       Search();
+//     });
+//   });
+//   div.appendChild(button);
+//   container.appendChild(div);
+// }
+
 function RenderUser(container, user) {
   const div = document.createElement('div');
   div.classList.add('user');
@@ -84,6 +105,15 @@ function RenderUser(container, user) {
   const con = ConnectionText(user.connection);
 
   div.innerHTML = `<div class='${cls}'>${con}</div><div class='userName'>${user.name}</div>`;
+  
+  // Display connection badge for 2nd, 3rd, and 4th connections
+  if (user.connection === 2 || user.connection === 3 || user.connection === 4) {
+    const badge = document.createElement('div');
+    badge.innerHTML = `(${user.connection}nd)`;
+    badge.classList.add('connectionBadge');
+    div.appendChild(badge);
+  }
+
   const button = document.createElement('div');
   button.innerHTML = (user.connection === 1) ? 'Remove' : 'Add';
   button.classList.add('button');

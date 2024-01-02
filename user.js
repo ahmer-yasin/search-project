@@ -47,35 +47,34 @@ const search = async (req, res) => {
   const userId = parseInt(req.params.userId);
   try {
     const results = await db.all(`
-    SELECT id, name,
-    CASE
-      WHEN id IN (SELECT friendId FROM Friends WHERE userId = ${userId}) THEN 1
-      WHEN id IN (
-        SELECT friendId
-        FROM Friends
-        WHERE userId IN (
-          SELECT friendId
-          FROM Friends
-          WHERE userId IN (SELECT friendId FROM Friends WHERE userId = ${userId})
-        )
-      ) THEN 2
-      WHEN id IN (
-        SELECT friendId
-        FROM Friends
-        WHERE userId IN (
-          SELECT friendId
-          FROM Friends
-          WHERE userId IN (
-            SELECT friendId
-            FROM Friends
-            WHERE userId IN (SELECT friendId FROM Friends WHERE userId = ${userId})
-          )
-        )
-      ) THEN 3
-      ELSE 0
-    END AS connection
-    FROM Users
-    WHERE name LIKE '${query}%'
+    SELECT U.id, U.name,
+      CASE
+        WHEN U.id IN (SELECT friendId FROM Friends WHERE userId = ${userId}) THEN 1
+        WHEN U.id IN (
+          SELECT F2.friendId
+          FROM Friends F1
+          JOIN Friends F2 ON F1.friendId = F2.userId
+          WHERE F1.userId = ${userId}
+        ) THEN 2
+        WHEN U.id IN (
+          SELECT F3.friendId
+          FROM Friends F1
+          JOIN Friends F2 ON F1.friendId = F2.userId
+          JOIN Friends F3 ON F2.friendId = F3.userId
+          WHERE F1.userId = ${userId}
+        ) THEN 3
+        WHEN U.id IN (
+          SELECT F4.friendId
+          FROM Friends F1
+          JOIN Friends F2 ON F1.friendId = F2.userId
+          JOIN Friends F3 ON F2.friendId = F3.userId
+          JOIN Friends F4 ON F3.friendId = F4.userId
+          WHERE F1.userId = ${userId}
+        ) THEN 4
+        ELSE 0
+      END AS connection
+    FROM Users U
+    WHERE U.name LIKE '${query}%'
     LIMIT 20;
     `);
     res.statusCode = 200;
@@ -98,28 +97,26 @@ const addFriend = async (req, res) => {
   const userId = parseInt(req.params.userId);
   const friendId = parseInt(req.params.friendId);
 
-  try {
+  // Check if they are not already friends
+  const areFriends = await db.all(`SELECT * FROM Friends WHERE userId = ${userId} AND friendId = ${friendId};`);
+  if (areFriends.length === 0) {
+    // If not, add them as friends
     await db.run(`INSERT INTO Friends (userId, friendId) VALUES (${userId}, ${friendId});`);
-    res.statusCode = 200;
-    res.json({ success: true });
-  } catch (err) {
-    res.statusCode = 500;
-    res.json({ success: false, error: err });
+    await db.run(`INSERT INTO Friends (userId, friendId) VALUES (${friendId}, ${userId});`);
   }
-}
+
+  res.json({ success: true });
+};
 module.exports.addFriend = addFriend;
 
 const removeFriend = async (req, res) => {
   const userId = parseInt(req.params.userId);
   const friendId = parseInt(req.params.friendId);
 
-  try {
-    await db.run(`DELETE FROM Friends WHERE (userId = ${userId} AND friendId = ${friendId}) OR (userId = ${friendId} AND friendId = ${userId});`);
-    res.statusCode = 200;
-    res.json({ success: true });
-  } catch (err) {
-    res.statusCode = 500;
-    res.json({ success: false, error: err });
-  }
-}
+  // Remove the friendship
+  await db.run(`DELETE FROM Friends WHERE userId = ${userId} AND friendId = ${friendId};`);
+  await db.run(`DELETE FROM Friends WHERE userId = ${friendId} AND friendId = ${userId};`);
+
+  res.json({ success: true });
+};
 module.exports.removeFriend = removeFriend;
