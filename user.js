@@ -1,8 +1,22 @@
 const db = require('./database');
 
 const init = async () => {
-  await db.run('CREATE TABLE Users (id INTEGER PRIMARY KEY AUTOINCREMENT, name varchar(32));');
-  await db.run('CREATE TABLE Friends (id INTEGER PRIMARY KEY AUTOINCREMENT, userId int, friendId int);');
+  await db.run(`CREATE TABLE Users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR(32)
+);
+`);
+  await db.run(`CREATE TABLE Friends (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId INT,
+    friendId INT,
+    FOREIGN KEY (userId) REFERENCES Users(id),
+    FOREIGN KEY (friendId) REFERENCES Users(id)
+);`);
+
+  await db.run(`CREATE INDEX idx_userId ON Friends (userId);`);
+  await db.run(`CREATE INDEX idx_friendId ON Friends (friendId);`)
+  await db.run('CREATE INDEX idx_users_name ON Users(name);');
   const users = [];
   const names = ['foo', 'bar', 'baz'];
   for (i = 0; i < 27000; ++i) {
@@ -46,36 +60,38 @@ const search = async (req, res) => {
   const query = req.params.query;
   const userId = parseInt(req.params.userId);
   try {
-    const results = await db.all(`
-    SELECT U.id, U.name,
-      CASE
+    const results = await db.all(`SELECT U.id, U.name,
+    CASE
         WHEN U.id IN (SELECT friendId FROM Friends WHERE userId = ${userId}) THEN 1
         WHEN U.id IN (
-          SELECT F2.friendId
-          FROM Friends F1
-          JOIN Friends F2 ON F1.friendId = F2.userId
-          WHERE F1.userId = ${userId}
+            SELECT F2.friendId
+            FROM Friends F1
+            JOIN Friends F2 ON F1.friendId = F2.userId
+            WHERE F1.userId = ${userId}
         ) THEN 2
         WHEN U.id IN (
-          SELECT F3.friendId
-          FROM Friends F1
-          JOIN Friends F2 ON F1.friendId = F2.userId
-          JOIN Friends F3 ON F2.friendId = F3.userId
-          WHERE F1.userId = ${userId}
+            SELECT F3.friendId
+            FROM Friends F1
+            JOIN Friends F2 ON F1.friendId = F2.userId
+            JOIN Friends F3 ON F2.friendId = F3.userId
+            WHERE F1.userId = ${userId}
         ) THEN 3
         WHEN U.id IN (
-          SELECT F4.friendId
-          FROM Friends F1
-          JOIN Friends F2 ON F1.friendId = F2.userId
-          JOIN Friends F3 ON F2.friendId = F3.userId
-          JOIN Friends F4 ON F3.friendId = F4.userId
-          WHERE F1.userId = ${userId}
+            SELECT F4.friendId
+            FROM Friends F1
+            JOIN Friends F2 ON F1.friendId = F2.userId
+            JOIN Friends F3 ON F2.friendId = F3.userId
+            JOIN Friends F4 ON F3.friendId = F4.userId
+            WHERE F1.userId = ${userId}
         ) THEN 4
         ELSE 0
-      END AS connection
-    FROM Users U
-    WHERE U.name LIKE '${query}%'
-    LIMIT 20;
+    END AS connection
+FROM Users U
+JOIN Friends F ON U.id = F.friendId OR U.id = F.userId
+WHERE U.name LIKE '${query}%'
+   AND (F.userId = ${userId} OR F.friendId = ${userId})
+LIMIT 20;
+
     `);
     res.statusCode = 200;
     res.json({
